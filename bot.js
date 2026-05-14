@@ -84,28 +84,38 @@ function buildAllParts(text, days = 200) {
 const parts = buildAllParts(text, 200);
 const progressFile = 'progress.json';
 
-function getNextPart() {
+function getCurrentPart() {
     let index = 0;
+
     if (fs.existsSync(progressFile)) {
         const data = JSON.parse(fs.readFileSync(progressFile));
-        index = data.index;
+        index = data.index || 0;
     }
 
     if (index >= parts.length) index = 0;
 
     const part = parts[index];
-    fs.writeFileSync(progressFile, JSON.stringify({ index: index + 1 }));
 
-    return `📖 מסילת ישרים
+    return {
+        index,
+        message: `📖 מסילת ישרים
 יום ${index + 1} מתוך ${parts.length}
 
 ${part.title}
 
-${part.text}`;
+${part.text}`
+    };
+}
+
+function advanceProgress(currentIndex) {
+    fs.writeFileSync(
+        progressFile,
+        JSON.stringify({ index: currentIndex + 1 })
+    );
 }
 
 // פונקציית השליחה
-async function sendMessage(retry = true) {
+async function sendMessage() {
     const now = new Date();
     const day = now.getDay(); // 0=ראשון
 
@@ -128,12 +138,13 @@ async function sendMessage(retry = true) {
 
    try {
       const myNumber = '120363426627988217@g.us';
-      const message = getNextPart();
+      const { index, message } = getCurrentPart();
 
       const chat = await client.getChatById(myNumber);
-      await chat.sendMessage(message);
+      await chat.sendMessage(myNumber, message);
 
      console.log("הודעה נשלחה בהצלחה!");
+     advanceProgress(index);
    } catch (err) {
      console.error("שגיאה בשליחה:", err);
      if (retry && err.message.includes('detached')) {

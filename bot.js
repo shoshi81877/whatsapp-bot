@@ -6,6 +6,7 @@ const QRcode = require('qrcode'); // ייבוא הספרייה
 
 const client = new Client({
     authStrategy: new LocalAuth(),
+    restartOnAuthFail: true,
     puppeteer: {
         // ב-Railway, אם הוספת Buildpack של Chromium, מומלץ לעיתים להשאיר את זה ריק 
         // או להשתמש בנתיב המערכת. ננסה את הנתיב הסטנדרטי:
@@ -115,43 +116,67 @@ function advanceProgress(currentIndex) {
 }
 
 // פונקציית השליחה
-async function sendMessage() {
-    const now = new Date();
-    const day = now.getDay(); // 0=ראשון
+async function sendMessage(retry = true) {
 
-    if (day === 6) {
-        console.log("שבת - לא נשלחת הודעה");
-        return;
+    try {
+
+        const now = new Date();
+        const day = now.getDay();
+
+        // שבת
+        if (day === 6) {
+            console.log("שבת - לא נשלחת הודעה");
+            return false;
+        }
+
+        // בדיקת חיבור בסיסית
+        if (!client.info || !client.pupPage) {
+            console.log("הלקוח לא מחובר עדיין");
+            return false;
+        }
+
+        // בדיקת מצב הוואטסאפ
+        const state = await client.getState();
+
+        if (state !== 'CONNECTED') {
+            console.log("הלקוח לא מוכן לשליחה:", state);
+            return false;
+        }
+
+        const myNumber = '120363426627988217@g.us';
+
+        const { index, message } = getCurrentPart();
+
+        // שליחה
+        await client.sendMessage(myNumber, message);
+
+        console.log(`נשלח יום ${index + 1} בהצלחה`);
+
+        // קידום רק אם הצליח
+        advanceProgress(index);
+
+        return true;
+
+    } catch (err) {
+
+        console.error("שגיאה בשליחה:", err.message);
+
+        // detached frame
+        if (
+            retry &&
+            err.message &&
+            err.message.includes('detached')
+        ) {
+
+            console.log("WhatsApp התרענן - ניסיון חוזר בעוד 5 דקות");
+
+            setTimeout(() => {
+                sendMessage(false);
+            }, 5 * 60 * 1000);
+        }
+
+        return false;
     }
-
-    if(!client.info || !client.pupPage) {
-      console.log("הלקוח לא מחובר עדיין, מדלג....");
-      return;
-    }
-
-   const state = await client.getState();
-   if (state !== 'CONNECTED') {
-      console.log("הלקוח לא מחוכן לשליחה:", state);
-     return;
-   }
-
-
-   try {
-      const myNumber = '120363426627988217@g.us';
-      const { index, message } = getCurrentPart();
-
-      const chat = await client.getChatById(myNumber);
-      await chat.sendMessage(myNumber, message);
-
-     console.log("הודעה נשלחה בהצלחה!");
-     advanceProgress(index);
-   } catch (err) {
-     console.error("שגיאה בשליחה:", err);
-     if (retry && err.message.includes('detached')) {
-       console.log("מנסה שוב בעוד 5 דקות....");
-       setTimout(() => sendMessage(false), 5000);
-    }
-  }
 }
 
 // אירוע יצירת ה-QR
@@ -251,8 +276,24 @@ function scheduleDailyMessage() {
     }, delay);
 }
 
-client.on('disconnnected', (reson) => {
-   console.log('הבוט התנתק:' ,reason);
+client.on('disconnected', async (reason) => {
+
+    console.log('הבוט התנתק:', reason);
+
+    try {
+
+        console.log("מנסה להתחבר מחדש...");
+
+        await client.destroy();
+
+        setTimeout(() => {
+            client.initialize();
+        }, 10000);
+
+    } catch (err) {
+
+        console.log("שגיאה בחיבור מחדש:", err.message);
+    }
 });
 
 // הפעלה

@@ -7,7 +7,9 @@ const QRcode = require('qrcode');
 let schedulerStarted = false;
 
 const client = new Client({
-    authStrategy: new LocalAuth(),
+    authStrategy: new LocalAuth({
+        dataPath: './whatsapp-session'
+    }),
     restartOnAuthFail: true,
     puppeteer: {
         executablePath: process.env.CHROME_PATH || '/usr/bin/chromium',
@@ -154,7 +156,7 @@ function getCurrentPart() {
     return {
         index,
         message:
-`📖 מסילת ישרים
+            `📖 מסילת ישרים
 יום ${index + 1} מתוך ${parts.length}
 
 ${part.title}
@@ -175,6 +177,8 @@ function advanceProgress(currentIndex) {
 
 // פונקציית השליחה
 async function sendMessage(retry = true) {
+
+    console.log("נכנס ל-sendMessage");
 
     try {
 
@@ -197,6 +201,8 @@ async function sendMessage(retry = true) {
 
         // בדיקת מצב
         const state = await client.getState();
+
+        console.log("state:", state);
 
         if (state !== 'CONNECTED') {
 
@@ -296,81 +302,51 @@ client.on('ready', async () => {
 // תזמון הודעה יומית
 function scheduleDailyMessage() {
 
-    let nextSendTime;
+    console.log("Scheduler התחיל");
 
-    function calculateNextSendTime() {
+    // שליחה ראשונה אחרי 30 שניות
+    setTimeout(async () => {
 
-        const now = new Date();
+        console.log("שולח הודעה ראשונה...");
 
-        const next = new Date();
+        await sendMessage();
 
-        next.setHours(8, 0, 0, 0);
+    }, 30 * 1000);
 
-        if (now > next) {
+    // בדיקה כל דקה
+    setInterval(async () => {
 
-            next.setDate(next.getDate() + 1);
+        try {
+
+            const now = new Date();
+
+            const day = now.getDay();
+
+            // שבת
+            if (day === 6) {
+                return;
+            }
+
+            const hour = now.getHours();
+            const minute = now.getMinutes();
+
+            // שליחה ב־08:00 בלבד
+            if (hour === 8 && minute === 0) {
+
+                console.log("הגיע זמן השליחה היומית");
+
+                await sendMessage();
+            }
+
+        } catch (err) {
+
+            console.log(
+                "שגיאה ב-scheduler:",
+                err.message
+            );
         }
 
-        nextSendTime = next;
-
-        return next - now;
-    }
-
-    const delay = calculateNextSendTime();
-
-    console.log(
-        `הודעה ראשונה תישלח בעוד ${Math.round(delay / 1000 / 60)} דקות`
-    );
-
-    // הדפסה כל 10 דקות
-    setInterval(() => {
-
-        if (!nextSendTime) return;
-
-        const now = new Date();
-
-        const diff = nextSendTime - now;
-
-        if (diff <= 0) return;
-
-        const minutes = Math.floor(diff / 1000 / 60);
-
-        console.log(
-            `נשארו ${minutes} דקות לשליחה הבאה`
-        );
-
-    }, 10 * 60 * 1000);
-
-    // שליחה ראשונה
-    setTimeout(() => {
-
-        sendMessage();
-
-        // עדכון זמן
-        nextSendTime = new Date();
-
-        nextSendTime.setDate(
-            nextSendTime.getDate() + 1
-        );
-
-        nextSendTime.setHours(8, 0, 0, 0);
-
-        // שליחה יומית
-        setInterval(() => {
-
-            sendMessage();
-
-            nextSendTime = new Date();
-
-            nextSendTime.setDate(
-                nextSendTime.getDate() + 1
-            );
-
-            nextSendTime.setHours(8, 0, 0, 0);
-
-        }, 24 * 60 * 60 * 1000);
-
-    }, delay);
+    }, 60 * 1000);
 }
 
 // התנתקות

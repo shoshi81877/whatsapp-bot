@@ -292,7 +292,10 @@ client.on('ready', async () => {
 
     console.log('הבוט מוכן ומחובר!');
 
-    // מניעת כמה schedulers
+    setTimeout(async () => {
+        await sendMessage();
+    }, 30000); // 30 שניות
+
     if (!schedulerStarted) {
 
         schedulerStarted = true;
@@ -307,13 +310,13 @@ function scheduleDailyMessage() {
     console.log("Scheduler התחיל");
 
     // שליחה ראשונה אחרי 30 שניות
-    setTimeout(async () => {
-
-        console.log("שולח הודעה ראשונה...");
-
-        await sendMessage();
-
-    }, 30 * 1000);
+    //setTimeout(async () => {
+//
+    //    console.log("שולח הודעה ראשונה...");
+//
+    //    await sendMessage();
+//
+    //}, 30 * 1000);
 
     // בדיקה כל דקה
     setInterval(async () => {

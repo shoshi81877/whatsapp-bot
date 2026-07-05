@@ -8,20 +8,22 @@ let schedulerStarted = false;
 
 const client = new Client({
     authStrategy: new LocalAuth({
-        dataPath: './whatsapp-session'
+        dataPath: "./whatsapp-session"
     }),
-    restartOnAuthFail: true,
+
+    webVersionCache: {
+        type: "none"
+    },
+
     puppeteer: {
-        executablePath: process.env.CHROME_PATH || '/usr/bin/chromium',
+        executablePath: process.env.CHROME_PATH || "/usr/bin/chromium",
         headless: true,
-        protocolTimeout: 120000,
         args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
-            '--no-zygote',
-            '--single-process'
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--no-zygote"
         ]
     }
 });

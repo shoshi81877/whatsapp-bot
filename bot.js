@@ -34,16 +34,46 @@ const text = fs.readFileSync('mesilat.txt', 'utf-8');
 // פיצול לפרקים
 function splitChapters(text) {
 
-    const regex = /(הקדמה|פרק\s+[א-ת]+)([\s\S]*?)(?=הקדמה|פרק\s+[א-ת]+|$)/g;
+    const lines = text.split('\n');
 
-    let match;
     let chapters = [];
+    let currentTitle = '';
+    let currentContent = [];
 
-    while ((match = regex.exec(text)) !== null) {
+    for (let line of lines) {
+
+        const trimmed = line.trim();
+
+        // כותרת חדשה
+        if (
+            trimmed === 'הקדמה' ||
+            /^פרק\s+[א-ת]+$/.test(trimmed)
+        ) {
+
+            // שמירת הקודם
+            if (currentTitle) {
+
+                chapters.push({
+                    title: currentTitle,
+                    content: currentContent.join('\n').trim()
+                });
+            }
+
+            currentTitle = trimmed;
+            currentContent = [];
+
+        } else {
+
+            currentContent.push(line);
+        }
+    }
+
+    // האחרון
+    if (currentTitle) {
 
         chapters.push({
-            title: match[1],
-            content: match[2].trim()
+            title: currentTitle,
+            content: currentContent.join('\n').trim()
         });
     }
 
@@ -53,35 +83,74 @@ function splitChapters(text) {
 // חלוקה חכמה בתוך פרק
 function splitChapterToParts(chapterText, targetSize) {
 
+    // ניקוי
+    chapterText = chapterText.replace(/\r/g, '');
+
+    // פיצול לפסקאות
     const paragraphs = chapterText
-        .split('\n')
-        .filter(p => p.trim() !== '');
+        .split(/\n\s*\n/)
+        .map(p => p.trim())
+        .filter(Boolean);
 
     let parts = [];
     let current = '';
 
-    for (let p of paragraphs) {
+    for (let paragraph of paragraphs) {
 
-        if ((current + p).length < targetSize) {
+        // אם הפסקה עצמה ארוכה מדי
+        if (paragraph.length > targetSize) {
 
-            current += p + '\n\n';
+            // חלוקה למשפטים
+            const sentences = paragraph.match(
+                /[^.!?:]+[.!?:]?/g
+            ) || [paragraph];
+
+            for (let sentence of sentences) {
+
+                sentence = sentence.trim();
+
+                // אם הוספת המשפט תחרוג
+                if (
+                    current.length + sentence.length >
+                    targetSize
+                ) {
+
+                    // שומרים רק אם יש תוכן
+                    if (current.trim()) {
+
+                        parts.push(current.trim());
+                    }
+
+                    current = '';
+                }
+
+                current += sentence + ' ';
+            }
 
         } else {
 
-            if (current.length > targetSize * 0.5) {
+            // פסקה רגילה
+            if (
+                current.length + paragraph.length >
+                targetSize
+            ) {
 
-                parts.push(current);
-                current = p + '\n\n';
+                if (current.trim()) {
 
-            } else {
+                    parts.push(current.trim());
+                }
 
-                current += p + '\n\n';
+                current = '';
             }
+
+            current += paragraph + '\n\n';
         }
     }
 
-    if (current) {
-        parts.push(current);
+    // חלק אחרון
+    if (current.trim()) {
+
+        parts.push(current.trim());
     }
 
     return parts;
@@ -118,7 +187,7 @@ function buildAllParts(text, days = 200) {
     return allParts;
 }
 
-const parts = buildAllParts(text, 200);
+const parts = buildAllParts(text);
 
 console.log("כמות חלקים:", parts.length);
 
